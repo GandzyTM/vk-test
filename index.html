@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Напоминалка — учебная страница</title>
+<script src="https://unpkg.com/@vkontakte/vk-bridge@2/dist/browser.min.js"></script>
+<style>
+  :root { --bg: #EEF2F7; --card: #FFFFFF; --ink: #1B2430; --muted: #5B6675; --accent: #2A5CAA; --ok: #1E7B4E; --err: #A33A2A; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 20px 16px 40px; background: var(--bg); color: var(--ink);
+         font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif; font-size: 16px; line-height: 1.45; }
+  h1 { font-size: 24px; margin: 8px 0 16px; }
+  .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .card h2 { font-size: 16px; margin: 0 0 8px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  button { width: 100%; height: 48px; border: none; border-radius: 12px; background: var(--accent); color: #fff;
+           font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+  button:focus-visible { outline: 3px solid #9DB8E4; outline-offset: 2px; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .err { color: var(--err); font-weight: 600; }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 13px; margin: 0; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1 id="hello">Загрузка…</h1>
+
+  <div class="card">
+    <h2>1. Связь с ВК</h2>
+    <div id="status" class="muted">Проверяю…</div>
+  </div>
+
+  <div class="card">
+    <h2>2. Кто открыл приложение</h2>
+    <div id="user" class="muted">—</div>
+  </div>
+
+  <div class="card">
+    <h2>3. Разрешить сообщения от группы</h2>
+    <div class="muted">Так родитель один раз даёт согласие, после чего группа может присылать ему напоминания.</div>
+    <button id="allowBtn" type="button">Разрешить сообщения</button>
+    <div id="allowResult" class="muted" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. Параметры запуска</h2>
+    <div class="muted">ВК передаёт их в адресе страницы: платформа, ID пользователя, ID группы и другие.</div>
+    <pre id="params">—</pre>
+  </div>
+
+<script>
+  // ID вашей тестовой группы «Look for» (из ссылки vk.ru/club241880733)
+  const GROUP_ID = 241880733;
+
+  const $ = (id) => document.getElementById(id);
+
+  // Параметры запуска, которые ВК добавляет в адрес
+  const params = Object.fromEntries(new URLSearchParams(location.search));
+  const vkParams = Object.entries(params).filter(([k]) => k.startsWith('vk_'));
+  $('params').textContent = vkParams.length
+    ? vkParams.map(([k, v]) => k + ' = ' + v).join('\n')
+    : 'Параметров нет: страница открыта не из ВК, а напрямую в браузере.';
+
+  if (typeof vkBridge === 'undefined') {
+    $('hello').textContent = 'Не удалось загрузить VK Bridge';
+    $('status').innerHTML = '<span class="err">Библиотека не загрузилась. Проверьте интернет.</span>';
+  } else {
+    // Обязательный первый вызов: сообщаем ВК, что приложение готово
+    vkBridge.send('VKWebAppInit')
+      .then(() => {
+        $('status').innerHTML = '<span class="ok">Приложение работает внутри ВК</span>';
+        return vkBridge.send('VKWebAppGetUserInfo');
+      })
+      .then((u) => {
+        $('hello').textContent = 'Привет, ' + u.first_name + '!';
+        $('user').textContent = u.first_name + ' ' + u.last_name + ' (ID ' + u.id + ')';
+      })
+      .catch((e) => {
+        $('hello').textContent = 'Привет!';
+        $('status').innerHTML = '<span class="err">Нет связи с ВК.</span> Так и должно быть, если страница открыта в обычном браузере. Откройте её внутри ВК.';
+        console.log(e);
+      });
+  }
+
+  $('allowBtn').addEventListener('click', () => {
+    if (typeof vkBridge === 'undefined') return;
+    $('allowResult').textContent = 'Жду ответа…';
+    vkBridge.send('VKWebAppAllowMessagesFromGroup', { group_id: GROUP_ID })
+      .then((r) => {
+        $('allowResult').innerHTML = r.result
+          ? '<span class="ok">Разрешено. Группа теперь может писать вам в личные сообщения.</span>'
+          : '<span class="err">Не разрешено.</span>';
+      })
+      .catch((e) => {
+        $('allowResult').innerHTML = '<span class="err">Отказано или ошибка.</span> Если вы нажали «Отмена», это нормально.';
+        console.log(e);
+      });
+  });
+</script>
+</body>
+</html>
